@@ -5,22 +5,28 @@ phases:
     runtime-versions:
       nodejs: 20
     commands:
+      - echo "=== Install dependencies ==="
       - npm ci
+      - echo "=== Install Playwright browsers ==="
       - npx playwright install --with-deps
   build:
     commands:
+      - echo "=== Clean previous reports ==="
       - rm -rf all-blob-reports playwright-report blob-report
       - |
         TEST_EXIT_CODE=0
         MERGE_AND_UPLOAD_EXIT_CODE=0
         for SHARD in 1 2 3 4; do
+          echo "=== Run shard $SHARD of 4 ==="
           mkdir -p "all-blob-reports/shard-$SHARD"
           npx playwright test --shard=$SHARD/4 || TEST_EXIT_CODE=1
+          echo "=== Collect blob report for shard $SHARD ==="
           if [ -d blob-report ]; then
             cp -R blob-report/. "all-blob-reports/shard-$SHARD/"
           fi
           rm -rf blob-report
         done
+        echo "=== Merge Playwright reports ==="
         mkdir -p playwright-report all-blob-reports-flat
         find all-blob-reports -type f -exec cp {} all-blob-reports-flat/ \;
         if find all-blob-reports-flat -type f | grep -q .; then
@@ -29,12 +35,14 @@ phases:
           echo "No blob report files were found to merge."
           MERGE_AND_UPLOAD_EXIT_CODE=1
         fi
+        echo "=== Upload to TestDino ==="
         if [ -f playwright-report/report.json ]; then
           npx tdpw upload ./playwright-report --token="$TESTDINO_TOKEN" || MERGE_AND_UPLOAD_EXIT_CODE=1
         else
           echo "Skipping TestDino upload because the merged report was not created."
           MERGE_AND_UPLOAD_EXIT_CODE=1
         fi
+        echo "=== Final build result ==="
         test $TEST_EXIT_CODE -eq 0 && test $MERGE_AND_UPLOAD_EXIT_CODE -eq 0
 
 artifacts:
